@@ -60,6 +60,7 @@ var
 	// Define a local copy of jQuery
 	jQuery = function( selector, context ) {
 		// The jQuery object is actually just the init constructor 'enhanced'
+		//jQuery对象实际上是init构造函数的创建的(init的原型和jQuery一致)
 		return new jQuery.fn.init( selector, context, rootjQuery );
 	},
 
