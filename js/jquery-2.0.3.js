@@ -98,6 +98,9 @@ jQuery.fn = jQuery.prototype = {
 	jquery: core_version,
 
 	constructor: jQuery,
+    //jq初始化可以传入两个参数selector, context
+    //context(上下文):A DOM Element, Document, or jQuery to use as context
+    //rootjQuery是页面加载时初始化的内部参数，等于$(document)
 	init: function( selector, context, rootjQuery ) {
 		var match, elem;
 
@@ -110,12 +113,15 @@ jQuery.fn = jQuery.prototype = {
 		// Handle HTML strings
         //处理字符串类型参数
 		if ( typeof selector === "string" ) {
-            //匹配标准html代码或者html标签,例如<div>,<p>123</p>
+            //匹配标准html标签,例如<div>,<p>123</p>或者<1>
 			if ( selector.charAt(0) === "<" && selector.charAt( selector.length - 1 ) === ">" && selector.length >= 3 ) {
 				// Assume that strings that start and end with <> are HTML and skip the regex check
 				match = [ null, selector, null ];
-
-			} else {
+                //此处和下面的代码中正则匹配出的html标签类似，不过正则匹配的时候内容限制可以更宽松
+                ///^(?:\s*(<[\w\W]+>)[^>]*|#([\w-]*))$/.exec('  <div>a</div>123    ')
+                //["  <div>a</div>123    ", "<div>a</div>", undefined, index: 0, input: "  <div>a</div>123    "]
+                //正则匹配出来的结果也是match[1]为selector,match[2]则为undefined
+            } else {
                 /*
                 (?:\s*(<[\w\W]+>)[^>]*|#([\w-]*)) 分析:
                 前提：正则表达式的exec方法是专门为匹配捕获组而生的，正则中每个括号都是一个捕获组，但是(?:...)这种捕获组称为
@@ -136,7 +142,7 @@ jQuery.fn = jQuery.prototype = {
              /^(?:\s*(<[\w\W]+>)[^>]*|#([\w-]*))$/.exec('  <div>a</div>123    ')
              //["  <div>a</div>123    ", "<div>a</div>", undefined, index: 0, input: "  <div>a</div>123    "]
              jQ处理传入的是一个html标签时:\s*(<[\w\W]+>)[^>]* 会屏蔽前置的任意数量空格,从'<'开始,到最后一个'>'结束，这
-             之后的任意字母，数字，下划线和'-'都会被忽略，而且不会报错
+             之后可以接任意字母，数字，下划线和'-'，但是这些都会被忽略
              /^(?:\s*(<[\w\W]+>)[^>]*|#([\w-]*))$/.exec('#abc')
              //["#abc", undefined, "abc", index: 0, input: "#abc"]
              jQ处理传入的是一个id选择器时:#([\w-]*)  以#开头,后面任意数量的接字母，数字，下划线和'-',而且match[2]就是id
@@ -146,10 +152,14 @@ jQuery.fn = jQuery.prototype = {
 			}
 
 			// Match html or make sure no context is specified for #id
+            //match[1]不为空表示匹配的是html标签
+            //或者 !context为true,即context是假值(或者没传入这个参数)
 			if ( match && (match[1] || !context) ) {
 
+                //匹配的是传入的一个html标签
 				// HANDLE: $(html) -> $(array)
 				if ( match[1] ) {
+                    //context 变成Dom对象
 					context = context instanceof jQuery ? context[0] : context;
 
 					// scripts is true for back-compat
@@ -176,7 +186,10 @@ jQuery.fn = jQuery.prototype = {
 					return this;
 
 				// HANDLE: $(#id)
-				} else {
+				}
+                //没有传入context参数,默认就是匹配id了(match只有在匹配的是html标签或者id时才会不为null)
+                else {
+                    //匹配的是id时，match[2]就是对应的id的值了
 					elem = document.getElementById( match[2] );
 
 					// Check parentNode to catch when Blackberry 4.6 returns
@@ -513,6 +526,14 @@ jQuery.extend({
 		}
 		context = context || document;
 
+        //例子 ：此时 参数变成了'<div>123</div>',document,true
+        //rsingleTag = /^<(\w+)\s*\/?>(?:<\/\1>|)$/,
+        /*
+        * /^<(\w+)\s*\/?>(?:<\/\1>|)$/分析
+        * <(\w+)\s*\/?>(?:<\/\1>|)
+        * \1 是反向引用,等于正则左起的第一个括号内的项
+        * <(\w+)\s*\/?>  未完成，待完成
+        * */
 		var parsed = rsingleTag.exec( data ),
 			scripts = !keepScripts && [];
 
