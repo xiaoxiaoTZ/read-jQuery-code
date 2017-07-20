@@ -129,12 +129,14 @@ jQuery.fn = jQuery.prototype = {
                 的数组，这个数组和普通数组的区别在于拥有input和index属性。exec匹配成功返回的数组的第一项为匹配整个正则对应的字符串
                 之后的每一项是按照从左往右匹配各个捕获组对应的字符串。例如
                 var match=/(a(a)?|b)/.exec('aa')  //["aa", "aa", "a", index: 0, input: "aa"]
-                match[0]是匹配整个正则的'aa',因为这个正则中有两对括号,所以有两个捕获组结果，第一个是匹配了a(a)
-                match[1]='aa',第二个匹配了(a),所以match[2]='a'  注意:如果对应捕获组无法匹配结果没有匹配项,数组中还是用undefined占位
+                match[0]是匹配整个正则的'aa',因为这个正则中有两对括号,所以有两个捕获组结果，
+                第一个是匹配了a(a),match[1]='aa',第二个匹配了(a),所以match[2]='a'
+                注意:如果对应捕获组匹配结果没有匹配项,数组中还是用undefined占位
+                    所以得出结论exec的返回结果有两种情况：1)无法匹配,返回null  2)可以匹配，返回length为(1+捕获型捕获组数量)的数组
 
                 rquickExpr = /^(?:\s*(<[\w\W]+>)[^>]*|#([\w-]*))$/,
-                1) \s*(<[\w\W]+>)[^>]*    开头有空格+'<'+1个以上任意字符+'>'+任意个数非'>'字符   匹配不标准的html代码
-                2) #([\w-]*)      #+任意个数(字母数字下划线-)  匹配ID
+                1) \s*(<[\w\W]+>)[^>]*    开头任意数量空格+'<'+1个以上任意字符+'>'+任意个数非'>'字符   匹配html代码(包括不标准的)
+                2) #([\w-]*)      #+任意个数(字母数字下划线和连字符'-')  匹配ID
                  注意:这个正则中包含3个捕获组(3个括号)，第一个为非捕获型,另外两个(<[\w\W]+>),([\w-]*)都是捕获型的捕获组
                  所以如果这个正则可以匹配结果，则返回的数组一定有三个项(match[0],match[1],match[2])+index+input,此处
                  巧妙的利用了捕获组来获取匹配中的重要的数据。
@@ -526,13 +528,17 @@ jQuery.extend({
 		}
 		context = context || document;
 
-        //例子 ：此时 参数变成了'<div>123</div>',document,true
+        //例子 ：此时 参数变成了'<p>name:<span>test<span></p>',document,true
         //rsingleTag = /^<(\w+)\s*\/?>(?:<\/\1>|)$/,
         /*
-        * /^<(\w+)\s*\/?>(?:<\/\1>|)$/分析
+        * /^<(\w+)\s*\/?>(?:<\/\1>|)$/ 分析:
         * <(\w+)\s*\/?>(?:<\/\1>|)
         * \1 是反向引用,等于正则左起的第一个括号内的项
-        * <(\w+)\s*\/?>  未完成，待完成
+        * <(\w+)\s*\/?>  匹配的是 < + 1个以上字母数字下划线 + 任意数量空格 + 可选的/
+        * (?:<\/\1>|)    匹配的是 非捕获型捕获组 < + / + (\1匹配的正则中的第一个捕获型括号内的内容) 或者 空
+        * 此处的正则可以匹配的html内容非常的宽松，可以匹配的类型包括:
+        * 1.<p ></p>   2.<p /></p>  3.<p/> 4.<p>    tip:此正则不能匹配<p></span>这种开始结束标签不一致的情况
+        * 以上的情况匹配出来的match[1]都是标签的名称'p'
         * */
 		var parsed = rsingleTag.exec( data ),
 			scripts = !keepScripts && [];
@@ -5809,6 +5815,10 @@ jQuery.extend({
 	},
 
 	buildFragment: function( elems, context, scripts, selection ) {
+        /*
+        * 示例:elems  '<p>姓名:<span>test<span></p>'
+        *      context  document
+        * */
 		var elem, tmp, tag, wrap, contains, j,
 			i = 0,
 			l = elems.length,
@@ -5827,6 +5837,9 @@ jQuery.extend({
 					jQuery.merge( nodes, elem.nodeType ? [ elem ] : elem );
 
 				// Convert non-html into a text node
+                // rhtml /<|&#?\w+;/ 分析:
+                // 匹配以'<'开头或者 & + #(可选) + 1个以上字母数字下划线 + ';'
+                // 例如 <abc  , &#abc_123;
 				} else if ( !rhtml.test( elem ) ) {
 					nodes.push( context.createTextNode( elem ) );
 
@@ -5834,9 +5847,28 @@ jQuery.extend({
 				} else {
 					tmp = tmp || fragment.appendChild( context.createElement("div") );
 
-					// Deserialize a standard representation
+					// Deserialize a standard representation (反序列化一个标准表示)
+                    //rtagName  /<([\w:]+)/ 分析
+                    // match=/<([\w:]+)/.exec("<p>姓名:<span>test<span></p>")
+                    // ["<p", "p", index: 0, input: "<p>姓名:<span>test<span></p>"]
+                    // match[1]可以得到标签的名称
 					tag = ( rtagName.exec( elem ) || ["", ""] )[ 1 ].toLowerCase();
+                    //wrapMap为特殊的标签类型，包含tbody,thead,tfoot,option,col等等，详见上面代码
 					wrap = wrapMap[ tag ] || wrapMap._default;
+                    /*
+                    * rxhtmlTag
+                    * /<(?!area|br|col|embed|hr|img|input|link|meta|param)(([\w:]+)[^>]*)\/>/gi 分析
+                    *   x(?=y)和x(?!y)不是捕获型和非捕获型的括号，功能和x?属于一类
+                    *   x(?=y)表示只有当x后面紧跟的是y时才匹配x (注意，是匹配x，不是xy)
+                    *   x(?!y)表示只有当x后面不是紧跟y时才匹配x (注意，是匹配x，不是xy)
+                    *
+                    *   < + 不是紧跟(area|br|col|embed|hr|img|input|link|meta|param)中的一种 + 大于一个的(字母数字下划线:)+任意数量的非'>'字符
+                    *
+                    *   此处的 elem.replace( rxhtmlTag, "<$1></$2>" )功能在于将非标准的封闭标签补全(双标签的元素写成了单标签的写法)
+                    *   例如:'<div class="test"/>'.replace( rxhtmlTag, "<$1></$2>" ) => "<div class="test"></div>"
+                    *
+                    * */
+
 					tmp.innerHTML = wrap[ 1 ] + elem.replace( rxhtmlTag, "<$1></$2>" ) + wrap[ 2 ];
 
 					// Descend through wrappers to the right content
